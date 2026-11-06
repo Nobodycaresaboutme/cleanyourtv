@@ -404,6 +404,43 @@
         </FrameLayout>
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/nowPlaying"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|left"
+        android:layout_marginStart="68dp"
+        android:layout_marginBottom="48dp"
+        android:orientation="vertical"
+        android:focusable="false"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/npTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:textColor="#FFFFFFFF"
+            android:textSize="28sp"
+            android:fontFamily="@string/font_light" />
+
+        <TextView
+            android:id="@+id/npArtist"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:textColor="#B3FFFFFF"
+            android:textSize="15sp"
+            android:fontFamily="@string/font_regular" />
+
+        <ProgressBar
+            android:id="@+id/npBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="360dp"
+            android:layout_height="4dp"
+            android:layout_marginTop="12dp" />
+    </LinearLayout>
+
     <!-- The single floating glass highlight that springs between tiles. -->
     <com.gathin.tvhome.GlassView
         android:id="@+id/glass"
