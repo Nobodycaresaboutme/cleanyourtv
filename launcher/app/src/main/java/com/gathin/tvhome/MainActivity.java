@@ -1809,6 +1809,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         String label = adapter.labelAt(position);
         int color = adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
+        View np = findViewById(R.id.nowPlaying); np.setY(y - (np.getHeight() > 0 ? np.getHeight() : 80 * density) - 16 * density);
         boolean changed = !label.contentEquals(heroName.getText());
         if (cinematic && heroArtAlpha > 0f) showHeroArt(position);
 
