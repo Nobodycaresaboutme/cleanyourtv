@@ -12,6 +12,9 @@ import android.os.SystemClock;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.ImageView;
+import android.graphics.Bitmap;
+import android.content.pm.PackageManager;
 import java.util.List;
 
 public class NowPlaying {
@@ -20,6 +23,8 @@ public class NowPlaying {
     private final TextView title;
     private final TextView artist;
     private final ProgressBar bar;
+    private final ImageView art;
+    private final TextView app;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean running = false;
 
@@ -38,6 +43,8 @@ public class NowPlaying {
         this.title = panel.findViewById(R.id.npTitle);
         this.artist = panel.findViewById(R.id.npArtist);
         this.bar = panel.findViewById(R.id.npBar);
+        this.art = panel.findViewById(R.id.npArt);
+        this.app = panel.findViewById(R.id.npApp);
     }
 
     public void start() {
@@ -79,6 +86,8 @@ public class NowPlaying {
             }
             title.setText(m.getString(MediaMetadata.METADATA_KEY_TITLE));
             artist.setText(m.getString(MediaMetadata.METADATA_KEY_ARTIST));
+            Bitmap bmp = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART); if (bmp == null) bmp = m.getBitmap(MediaMetadata.METADATA_KEY_ART); if (bmp != null) { art.setImageBitmap(bmp); art.setVisibility(View.VISIBLE); } else { art.setVisibility(View.GONE); }
+            try { PackageManager pm = ctx.getPackageManager(); app.setText(pm.getApplicationLabel(pm.getApplicationInfo(found.getPackageName(), 0))); } catch (Exception e) { app.setText(found.getPackageName()); }
             long duration = m.getLong(MediaMetadata.METADATA_KEY_DURATION);
             long pos = s.getPosition();
             if (s.getState() == PlaybackState.STATE_PLAYING) {
