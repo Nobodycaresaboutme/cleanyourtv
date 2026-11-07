@@ -1,0 +1,11 @@
+{
+  "_help": "Extra tiles for the control panel (Settings key). 'package' opens that app and the tile is hidden if it is not installed. 'action' opens a settings page (android.settings.*) or any other intent action; optional 'uri'. Put a copy of this file in /sdcard/Android/data/com.gathin.tvhome/files/ to change tiles without rebuilding.",
+  "tiles": [
+    {"title": "Bluetooth", "subtitle": "Remotes and audio", "action": "android.settings.BLUETOOTH_SETTINGS"},
+    {"title": "Date and time", "subtitle": "Clock settings", "action": "android.settings.DATE_SETTINGS"},
+    {"title": "Apps", "subtitle": "Manage apps", "action": "android.settings.MANAGE_APPLICATIONS_SETTINGS"},
+    {"title": "Cast", "subtitle": "Screen mirroring", "action": "android.settings.CAST_SETTINGS"},
+    {"title": "Netflix", "subtitle": "Open", "package": "com.netflix.ninja"},
+    {"title": "SmartTube", "subtitle": "Open", "package": "org.smarttube.stable"}
+  ]
+}

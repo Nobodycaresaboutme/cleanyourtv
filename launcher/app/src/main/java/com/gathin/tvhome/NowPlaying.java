@@ -1,8 +1,9 @@
 package com.gathin.tvhome;
 
+import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.pm.PackageManager;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
@@ -13,6 +14,7 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.View;
+import androidx.recyclerview.widget.RecyclerView;
 import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -24,7 +26,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +52,9 @@ public class NowPlaying {
         th.setDaemon(true);
         return th;
     });
-    private final Map<String, String> appNames = new HashMap<String, String>();
+    private RecyclerView grid;
+    private View listen;
+    private boolean scrolling = false;
     private final Map<String, TreeMap<Long, String>> cache =
             new LinkedHashMap<String, TreeMap<Long, String>>(16, 0.75f, true) {
                 @Override
@@ -102,6 +105,8 @@ public class NowPlaying {
         next = panel.findViewById(R.id.npNext);
 
         panel.setAlpha(0f);
+        styleCard();
+        watchGridScroll();
         bar.setKeyProgressIncrement(10);
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -131,7 +136,10 @@ public class NowPlaying {
         // Bar: Left/Right seek, Up goes to play/pause, Down goes back to the dock.
         bar.setOnKeyListener((v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN && onDown != null) onDown.run();
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    if (listen.getVisibility() == View.VISIBLE) listen.requestFocus();
+                    else if (onDown != null) onDown.run();
+                }
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
@@ -140,6 +148,81 @@ public class NowPlaying {
             }
             return false;
         });
+        // Listen pill: OK opens the full-screen player, Up goes back to the bar, Down to the dock.
+        listen.setOnClickListener(v -> openFull());
+        listen.setOnKeyListener((v, keyCode, event) -> {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN && onDown != null) onDown.run();
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) bar.requestFocus();
+                return true;
+            }
+            return keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
+        });
+        panel.setOnClickListener(v -> openFull());
+        art.setOnClickListener(v -> openFull());
+    }
+
+    /** Glass card, a glass "Listen" pill in place of the app name, and the focus spring on the round buttons. */
+    private void styleCard() {
+        int pad = Glass.dp(ctx, 16);
+        panel.setBackground(Glass.glass(ctx, 28));
+        panel.setPadding(pad, pad, pad, pad);
+        listen = app;
+        app.setText("Listen");
+        app.setAllCaps(false);
+        app.setLetterSpacing(0f);
+        app.setTextSize(13);
+        app.setTextColor(0xFFFFFFFF);
+        app.setGravity(android.view.Gravity.CENTER);
+        app.setPadding(Glass.dp(ctx, 22), Glass.dp(ctx, 6), Glass.dp(ctx, 22), Glass.dp(ctx, 6));
+        Glass.focusable(app, 40);
+        for (View b : new View[] {prev, play, next}) {
+            b.setBackground(Glass.glassFocusable(ctx, 40));
+            b.setOnFocusChangeListener((v, focused) -> Glass.springScale(v, focused ? 1.08f : 1f));
+        }
+    }
+
+    /** While the grid scrolls the card steps out of the way, so it never rides over the tiles. */
+    private void watchGridScroll() {
+        if (!(ctx instanceof Activity)) return;
+        grid = ((Activity) ctx).findViewById(R.id.grid);
+        if (grid == null) return;
+        grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(RecyclerView rv, int state) {
+                scrolling = state != RecyclerView.SCROLL_STATE_IDLE;
+                if (scrolling) {
+                    hideNow();
+                } else if (dockShown && panel.getVisibility() == View.VISIBLE) {
+                    panel.animate().alpha(1f).setDuration(200).start();
+                }
+            }
+
+            @Override
+            public void onScrolled(RecyclerView rv, int dx, int dy) {
+                if ((dx != 0 || dy != 0) && panel.getAlpha() > 0f) hideNow();
+            }
+        });
+    }
+
+    private void hideNow() {
+        if (panel.findFocus() != null) return;
+        panel.animate().cancel();
+        panel.setAlpha(0f);
+    }
+
+    private void openFull() {
+        if (ctl == null) return;
+        Intent i = new Intent(ctx, NowPlayingActivity.class);
+        if (!(ctx instanceof Activity)) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            ctx.startActivity(i);
+        } catch (RuntimeException e) {
+            // no full-screen player: the card still works
+        }
     }
 
     private View.OnKeyListener buttonKeys(final int pillId) {
@@ -175,7 +258,7 @@ public class NowPlaying {
         bottomY = y;
         dockShown = true;
         reposition();
-        if (panel.getAlpha() < 1f) panel.animate().alpha(1f).setDuration(200).start();
+        if (!scrolling && panel.getAlpha() < 1f) panel.animate().alpha(1f).setDuration(200).start();
         if (SystemClock.elapsedRealtime() - lastUpdate > 1500) update();
     }
 
@@ -237,24 +320,28 @@ public class NowPlaying {
             art.setImageBitmap(b);
             art.setVisibility(View.VISIBLE);
             artSet = true;
+            tintAurora(b);
         } else {
             art.setVisibility(View.INVISIBLE);
             artSet = false;
+            tintAurora(null);
         }
     }
 
-    private void setApp(String pkg) {
-        String name = appNames.get(pkg);
-        if (name == null) {
+    /** The home aurora takes the average colour of the album art (cheap: one 1x1 scale). */
+    private void tintAurora(Bitmap b) {
+        if (!(ctx instanceof Activity) || Glass.bgMode(ctx) != Glass.BG_AURORA) return;
+        View v = ((Activity) ctx).findViewById(R.id.aurora);
+        if (!(v instanceof AuroraView)) return;
+        int color = 0;
+        if (b != null) {
             try {
-                PackageManager pm = ctx.getPackageManager();
-                name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
-            } catch (Exception ex) {
-                name = pkg;
+                color = Bitmap.createScaledBitmap(b, 1, 1, true).getPixel(0, 0) | 0xFF000000;
+            } catch (RuntimeException e) {
+                color = 0;
             }
-            appNames.put(pkg, name);
         }
-        setText(app, name);
+        ((AuroraView) v).tint(color);
     }
 
     private void update() {
@@ -291,7 +378,6 @@ public class NowPlaying {
                 currentKey = key;
                 setText(title, t);
                 setText(artist, a);
-                setApp(pkg);
                 setArt(m);
                 lyricsMap = null;
                 setText(lyric, " ");
@@ -345,7 +431,7 @@ public class NowPlaying {
                 panel.setVisibility(View.VISIBLE);
                 panel.post(this::reposition);
             }
-            if (dockShown && panel.getAlpha() < 1f) panel.setAlpha(1f);
+            if (dockShown && !scrolling && panel.getAlpha() < 1f) panel.setAlpha(1f);
         } catch (RuntimeException e) {
             hide();
         }
