@@ -12,6 +12,13 @@
         android:layout_height="match_parent"
         android:importantForAccessibility="no" />
 
+    <!-- Aurora backdrop: slowly drifting green, blue and violet glow. Remove this view to turn it off. -->
+    <com.gathin.tvhome.AuroraView
+        android:id="@+id/aurora"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:importantForAccessibility="no" />
+
     <!-- Cinematic top shelf (cinematic_home): the focused dock app's artwork, a few pixels across and
          stretched over the screen, which softens it like a blur without the cost of one. Hidden otherwise. -->
     <ImageView
@@ -408,6 +415,7 @@
 
 
 
+
     <LinearLayout
         android:id="@+id/nowPlaying"
         android:layout_width="match_parent"
@@ -423,9 +431,9 @@
 
         <ImageView
             android:id="@+id/npArt"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:layout_marginEnd="16dp"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_marginEnd="18dp"
             android:scaleType="centerCrop" />
 
         <LinearLayout
@@ -434,36 +442,54 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <LinearLayout
+            <TextView
+                android:id="@+id/npTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:textColor="#FFFFFFFF"
+                android:textSize="24sp"
+                android:fontFamily="@string/font_light" />
+
+            <TextView
+                android:id="@+id/npArtist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:textColor="#B3FFFFFF"
+                android:textSize="14sp"
+                android:fontFamily="@string/font_regular" />
+
+            <TextView
+                android:id="@+id/npLyric"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text=" "
+                android:textColor="#E6FFFFFF"
+                android:textSize="15sp"
+                android:fontFamily="@string/font_regular" />
+
+            <TextView
+                android:id="@+id/npLyricNext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:text=" "
+                android:alpha="0.55"
+                android:textColor="#FFFFFFFF"
+                android:textSize="13sp"
+                android:fontFamily="@string/font_regular" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:id="@+id/npTitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:singleLine="true"
-                        android:textColor="#FFFFFFFF"
-                        android:textSize="24sp"
-                        android:fontFamily="@string/font_light" />
-
-                    <TextView
-                        android:id="@+id/npArtist"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:singleLine="true"
-                        android:textColor="#B3FFFFFF"
-                        android:textSize="14sp"
-                        android:fontFamily="@string/font_regular" />
-                </LinearLayout>
 
                 <ImageView
                     android:id="@+id/npPrev"
@@ -474,14 +500,15 @@
                     android:background="@drawable/np_btn_bg"
                     android:focusable="true"
                     android:clickable="true"
-                    android:contentDescription="Previous" />
+                    android:contentDescription="Previous"
+                    android:nextFocusLeft="@+id/npPrev" />
 
                 <ImageView
                     android:id="@+id/npPlay"
                     android:layout_width="40dp"
                     android:layout_height="40dp"
-                    android:layout_marginStart="8dp"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
                     android:padding="9dp"
                     android:src="@drawable/np_ic_pause"
                     android:background="@drawable/np_btn_bg"
@@ -498,25 +525,15 @@
                     android:background="@drawable/np_btn_bg"
                     android:focusable="true"
                     android:clickable="true"
-                    android:contentDescription="Next" />
+                    android:contentDescription="Next"
+                    android:nextFocusRight="@+id/npNext" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/npLyric"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:text=" "
-                android:textColor="#E6FFFFFF"
-                android:textSize="15sp"
-                android:fontFamily="@string/font_regular" />
 
             <SeekBar
                 android:id="@+id/npBar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
                 android:paddingStart="0dp"
                 android:paddingEnd="0dp"
                 android:paddingTop="4dp"
