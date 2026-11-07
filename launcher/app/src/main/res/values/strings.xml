@@ -155,5 +155,4 @@
     <string name="last_opened">Last opened %1$s</string>
     <!-- game_day: a game on now, in the race panel. -->
     <string name="game_live">Live now</string>
-    <string name="control_panel">Control panel</string>
 </resources>

@@ -12,13 +12,6 @@
         android:layout_height="match_parent"
         android:importantForAccessibility="no" />
 
-    <!-- Aurora backdrop: slowly drifting green, blue and violet glow. Remove this view to turn it off. -->
-    <com.gathin.tvhome.AuroraView
-        android:id="@+id/aurora"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:importantForAccessibility="no" />
-
     <!-- Cinematic top shelf (cinematic_home): the focused dock app's artwork, a few pixels across and
          stretched over the screen, which softens it like a blur without the cost of one. Hidden otherwise. -->
     <ImageView
@@ -411,144 +404,82 @@
         </FrameLayout>
     </LinearLayout>
 
-
-
-
-
-
     <LinearLayout
         android:id="@+id/nowPlaying"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|left"
+        android:layout_gravity="top|left"
         android:layout_marginStart="68dp"
-        android:layout_marginEnd="56dp"
-        android:layout_marginBottom="48dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:focusable="false"
         android:visibility="gone">
 
         <ImageView
             android:id="@+id/npArt"
-            android:layout_width="96dp"
-            android:layout_height="96dp"
-            android:layout_marginEnd="18dp"
+            android:layout_width="104dp"
+            android:layout_height="104dp"
+            android:background="#22FFFFFF"
             android:scaleType="centerCrop" />
 
         <LinearLayout
-            android:layout_width="0dp"
-            android:layout_weight="1"
+            android:layout_width="360dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
             android:orientation="vertical">
 
             <TextView
-                android:id="@+id/npTitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:singleLine="true"
-                android:textColor="#FFFFFFFF"
-                android:textSize="24sp"
-                android:fontFamily="@string/font_light" />
-
-            <TextView
-                android:id="@+id/npArtist"
-                android:layout_width="wrap_content"
+                android:id="@+id/npLabel"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:singleLine="true"
                 android:textColor="#B3FFFFFF"
-                android:textSize="14sp"
-                android:fontFamily="@string/font_regular" />
+                android:textSize="10sp"
+                android:letterSpacing="0.16"
+                android:textAllCaps="true"
+                android:fontFamily="@string/font_medium" />
 
             <TextView
-                android:id="@+id/npLyric"
+                android:id="@+id/npTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="1dp"
                 android:singleLine="true"
                 android:ellipsize="end"
-                android:text=" "
-                android:textColor="#E6FFFFFF"
-                android:textSize="15sp"
-                android:fontFamily="@string/font_regular" />
-
-            <TextView
-                android:id="@+id/npLyricNext"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:text=" "
-                android:alpha="0.55"
                 android:textColor="#FFFFFFFF"
-                android:textSize="13sp"
-                android:fontFamily="@string/font_regular" />
+                android:textSize="20sp"
+                android:fontFamily="@string/font_medium" />
 
-            <LinearLayout
-                android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/npSub"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <ImageView
-                    android:id="@+id/npPrev"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="9dp"
-                    android:src="@drawable/np_ic_prev"
-                    android:background="@drawable/np_btn_bg"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:contentDescription="Previous"
-                    android:nextFocusLeft="@+id/npPrev" />
-
-                <ImageView
-                    android:id="@+id/npPlay"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="12dp"
-                    android:layout_marginEnd="12dp"
-                    android:padding="9dp"
-                    android:src="@drawable/np_ic_pause"
-                    android:background="@drawable/np_btn_bg"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:contentDescription="Play or pause" />
-
-                <ImageView
-                    android:id="@+id/npNext"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:padding="9dp"
-                    android:src="@drawable/np_ic_next"
-                    android:background="@drawable/np_btn_bg"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:contentDescription="Next"
-                    android:nextFocusRight="@+id/npNext" />
-            </LinearLayout>
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="#CCFFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="@string/font_regular" />
 
             <SeekBar
                 android:id="@+id/npBar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
                 android:paddingStart="0dp"
                 android:paddingEnd="0dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="2dp"
                 android:thumbTint="#FFFFFFFF"
                 android:progressTint="#FFFFFFFF"
-                android:progressBackgroundTint="#33FFFFFF"
+                android:progressBackgroundTint="#40FFFFFF"
                 android:splitTrack="false"
                 android:focusable="true" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/npElapsed"
@@ -558,30 +489,78 @@
                     android:gravity="left"
                     android:text="0:00"
                     android:textColor="#B3FFFFFF"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:fontFamily="@string/font_regular" />
 
                 <TextView
-                    android:id="@+id/npApp"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:singleLine="true"
-                    android:textColor="#8CFFFFFF"
-                    android:textSize="11sp"
-                    android:letterSpacing="0.2"
-                    android:textAllCaps="true"
-                    android:fontFamily="@string/font_medium" />
-
-                <TextView
-                    android:id="@+id/npTotal"
+                    android:id="@+id/npRemain"
                     android:layout_width="0dp"
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
                     android:gravity="right"
-                    android:text="0:00"
+                    android:text="-0:00"
                     android:textColor="#B3FFFFFF"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
                     android:fontFamily="@string/font_regular" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:id="@+id/npPrev"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:padding="9dp"
+                    android:src="@drawable/np_ic_prev"
+                    android:background="@drawable/np_btn_bg"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="Previous" />
+
+                <ImageView
+                    android:id="@+id/npPlay"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="10dp"
+                    android:padding="9dp"
+                    android:src="@drawable/np_ic_pause"
+                    android:background="@drawable/np_btn_bg"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="Play or pause" />
+
+                <ImageView
+                    android:id="@+id/npNext"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:padding="9dp"
+                    android:src="@drawable/np_ic_next"
+                    android:background="@drawable/np_btn_bg"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="Next" />
+
+                <TextView
+                    android:id="@+id/npOpen"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="14dp"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:gravity="center"
+                    android:singleLine="true"
+                    android:textColor="#FFFFFFFF"
+                    android:textSize="12sp"
+                    android:fontFamily="@string/font_medium"
+                    android:background="@drawable/np_pill_bg"
+                    android:focusable="true"
+                    android:clickable="true" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

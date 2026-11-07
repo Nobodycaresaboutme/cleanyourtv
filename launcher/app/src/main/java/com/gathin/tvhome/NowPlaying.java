@@ -1,10 +1,11 @@
 package com.gathin.tvhome;
 
-import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Outline;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
@@ -14,54 +15,29 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.View;
-import androidx.recyclerview.widget.RecyclerView;
+import android.view.ViewOutlineProvider;
 import android.widget.ImageView;
 import android.widget.SeekBar;
 import android.widget.TextView;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+/** The Now Playing card above the dock: art, title, artist, progress, round buttons, "Open in" pill. */
 public class NowPlaying {
     public Runnable onDown;
+    public Runnable onShowChange;
 
     private final Context ctx;
     private final View panel;
     private final ImageView art, prev, play, next;
-    private final TextView app, title, artist, lyric, lyricNext, elapsed, total;
+    private final TextView label, title, sub, elapsed, remain, open;
     private final SeekBar bar;
     private final float density;
     private final MediaSessionManager msm;
     private final ComponentName listener;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ExecutorService pool = Executors.newSingleThreadExecutor(r -> {
-        Thread th = new Thread(r, "np-lyrics");
-        th.setDaemon(true);
-        return th;
-    });
-    private RecyclerView grid;
-    private View listen;
-    private boolean scrolling = false;
-    private final Map<String, TreeMap<Long, String>> cache =
-            new LinkedHashMap<String, TreeMap<Long, String>>(16, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, TreeMap<Long, String>> e) {
-                    return size() > 20;
-                }
-            };
+    private final Map<String, String> appNames = new HashMap<String, String>();
 
     private MediaController ctl;
     private boolean running = false;
@@ -73,14 +49,14 @@ public class NowPlaying {
     private long lastUpdate = 0;
     private float bottomY = 0f;
     private String currentKey = "";
-    private volatile TreeMap<Long, String> lyricsMap = null;
+    private String currentPkg = "";
 
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
             if (!running) return;
             update();
-            reposition();
+            if (dockShown) reposition();
             handler.postDelayed(this, dockShown ? 1000 : 3000);
         }
     };
@@ -92,21 +68,27 @@ public class NowPlaying {
         this.msm = ctx.getSystemService(MediaSessionManager.class);
         this.listener = new ComponentName(ctx, GuardRevival.class);
         art = panel.findViewById(R.id.npArt);
-        app = panel.findViewById(R.id.npApp);
+        label = panel.findViewById(R.id.npLabel);
         title = panel.findViewById(R.id.npTitle);
-        artist = panel.findViewById(R.id.npArtist);
-        lyric = panel.findViewById(R.id.npLyric);
-        lyricNext = panel.findViewById(R.id.npLyricNext);
-        elapsed = panel.findViewById(R.id.npElapsed);
-        total = panel.findViewById(R.id.npTotal);
+        sub = panel.findViewById(R.id.npSub);
         bar = panel.findViewById(R.id.npBar);
+        elapsed = panel.findViewById(R.id.npElapsed);
+        remain = panel.findViewById(R.id.npRemain);
         prev = panel.findViewById(R.id.npPrev);
         play = panel.findViewById(R.id.npPlay);
         next = panel.findViewById(R.id.npNext);
+        open = panel.findViewById(R.id.npOpen);
 
         panel.setAlpha(0f);
-        styleCard();
-        watchGridScroll();
+        final float radius = 12 * density;
+        art.setClipToOutline(true);
+        art.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View v, Outline o) {
+                o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
+            }
+        });
+
         bar.setKeyProgressIncrement(10);
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -115,12 +97,14 @@ public class NowPlaying {
                 lastUserSeek = SystemClock.elapsedRealtime();
                 ctl.getTransportControls().seekTo(p * 1000L);
                 setText(elapsed, fmt(p * 1000L));
+                setText(remain, "-" + fmt((sb.getMax() - p) * 1000L));
             }
             @Override
             public void onStartTrackingTouch(SeekBar sb) { }
             @Override
             public void onStopTrackingTouch(SeekBar sb) { }
         });
+
         prev.setOnClickListener(v -> { if (ctl != null) ctl.getTransportControls().skipToPrevious(); });
         next.setOnClickListener(v -> { if (ctl != null) ctl.getTransportControls().skipToNext(); });
         play.setOnClickListener(v -> {
@@ -128,118 +112,47 @@ public class NowPlaying {
             if (isPlaying) ctl.getTransportControls().pause();
             else ctl.getTransportControls().play();
         });
+        open.setOnClickListener(v -> openApp());
 
-        // Buttons: Up goes to a top pill (prev to Inputs, play to Wi-Fi, next to Settings), Down goes to the bar.
-        prev.setOnKeyListener(buttonKeys(R.id.btnInputs));
-        play.setOnKeyListener(buttonKeys(R.id.btnWifi));
-        next.setOnKeyListener(buttonKeys(R.id.btnSettings));
-        // Bar: Left/Right seek, Up goes to play/pause, Down goes back to the dock.
-        bar.setOnKeyListener((v, keyCode, event) -> {
-            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                    if (listen.getVisibility() == View.VISIBLE) listen.requestFocus();
-                    else if (onDown != null) onDown.run();
-                }
-                return true;
-            }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) play.requestFocus();
-                return true;
-            }
-            return false;
-        });
-        // Listen pill: OK opens the full-screen player, Up goes back to the bar, Down to the dock.
-        listen.setOnClickListener(v -> openFull());
-        listen.setOnKeyListener((v, keyCode, event) -> {
+        View.OnFocusChangeListener grow = (v, has) ->
+                v.animate().scaleX(has ? 1.12f : 1f).scaleY(has ? 1.12f : 1f).setDuration(120).start();
+        prev.setOnFocusChangeListener(grow);
+        play.setOnFocusChangeListener(grow);
+        next.setOnFocusChangeListener(grow);
+        open.setOnFocusChangeListener(grow);
+
+        // Buttons row: Down goes back to the dock, Up goes to the bar (or the top pills when there is no bar).
+        View.OnKeyListener rowKeys = (v, keyCode, event) -> {
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN && onDown != null) onDown.run();
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) bar.requestFocus();
-                return true;
-            }
-            return keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
-        });
-        panel.setOnClickListener(v -> openFull());
-        art.setOnClickListener(v -> openFull());
-    }
-
-    /** Glass card, a glass "Listen" pill in place of the app name, and the focus spring on the round buttons. */
-    private void styleCard() {
-        int pad = Glass.dp(ctx, 16);
-        panel.setBackground(Glass.glass(ctx, 28));
-        panel.setPadding(pad, pad, pad, pad);
-        listen = app;
-        app.setText("Listen");
-        app.setAllCaps(false);
-        app.setLetterSpacing(0f);
-        app.setTextSize(13);
-        app.setTextColor(0xFFFFFFFF);
-        app.setGravity(android.view.Gravity.CENTER);
-        app.setPadding(Glass.dp(ctx, 22), Glass.dp(ctx, 6), Glass.dp(ctx, 22), Glass.dp(ctx, 6));
-        Glass.focusable(app, 40);
-        for (View b : new View[] {prev, play, next}) {
-            b.setBackground(Glass.glassFocusable(ctx, 40));
-            b.setOnFocusChangeListener((v, focused) -> Glass.springScale(v, focused ? 1.08f : 1f));
-        }
-    }
-
-    /** While the grid scrolls the card steps out of the way, so it never rides over the tiles. */
-    private void watchGridScroll() {
-        if (!(ctx instanceof Activity)) return;
-        grid = ((Activity) ctx).findViewById(R.id.grid);
-        if (grid == null) return;
-        grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
-            @Override
-            public void onScrollStateChanged(RecyclerView rv, int state) {
-                scrolling = state != RecyclerView.SCROLL_STATE_IDLE;
-                if (scrolling) {
-                    hideNow();
-                } else if (dockShown && panel.getVisibility() == View.VISIBLE) {
-                    panel.animate().alpha(1f).setDuration(200).start();
-                }
-            }
-
-            @Override
-            public void onScrolled(RecyclerView rv, int dx, int dy) {
-                if ((dx != 0 || dy != 0) && panel.getAlpha() > 0f) hideNow();
-            }
-        });
-    }
-
-    private void hideNow() {
-        if (panel.findFocus() != null) return;
-        panel.animate().cancel();
-        panel.setAlpha(0f);
-    }
-
-    private void openFull() {
-        if (ctl == null) return;
-        Intent i = new Intent(ctx, NowPlayingActivity.class);
-        if (!(ctx instanceof Activity)) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try {
-            ctx.startActivity(i);
-        } catch (RuntimeException e) {
-            // no full-screen player: the card still works
-        }
-    }
-
-    private View.OnKeyListener buttonKeys(final int pillId) {
-        return (v, keyCode, event) -> {
-            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                if (event.getAction() == KeyEvent.ACTION_DOWN) bar.requestFocus();
-                return true;
-            }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                    View pill = panel.getRootView().findViewById(pillId);
-                    if (pill != null && pill.getVisibility() == View.VISIBLE) pill.requestFocus();
+                    if (bar.getVisibility() == View.VISIBLE) bar.requestFocus();
+                    else topPill();
                 }
                 return true;
             }
             return false;
         };
+        prev.setOnKeyListener(rowKeys);
+        play.setOnKeyListener(rowKeys);
+        next.setOnKeyListener(rowKeys);
+        open.setOnKeyListener(rowKeys);
+
+        // Bar: Left/Right seek 10 s, Up goes to the Wi-Fi pill, Down goes to the buttons.
+        bar.setOnKeyListener((v, keyCode, event) -> {
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) topPill();
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) play.requestFocus();
+                return true;
+            }
+            return false;
+        });
     }
 
     public void start() {
@@ -253,12 +166,16 @@ public class NowPlaying {
         handler.removeCallbacks(tick);
     }
 
-    /** Puts the card just above the given y and fades it in. */
+    public boolean isShowing() {
+        return panel.getVisibility() == View.VISIBLE;
+    }
+
+    /** Puts the card's bottom edge at y (the top of the dock) and fades it in. */
     public void place(float y) {
         bottomY = y;
         dockShown = true;
         reposition();
-        if (!scrolling && panel.getAlpha() < 1f) panel.animate().alpha(1f).setDuration(200).start();
+        if (isShowing() && panel.getAlpha() < 1f) panel.animate().alpha(1f).setDuration(200).start();
         if (SystemClock.elapsedRealtime() - lastUpdate > 1500) update();
     }
 
@@ -268,23 +185,58 @@ public class NowPlaying {
         if (panel.getAlpha() > 0f) panel.animate().alpha(0f).setDuration(160).start();
     }
 
-    /** Up from the dock: focus the bar (the lowest part of the card). */
+    /** Up from the dock: focus the buttons row (the part of the card nearest the dock). */
     public boolean focusControls() {
-        if (panel.getVisibility() != View.VISIBLE) return false;
+        if (!isShowing()) return false;
         panel.setAlpha(1f);
         dockShown = true;
-        return bar.requestFocus();
+        return play.requestFocus();
     }
 
+    private void topPill() {
+        View pill = panel.getRootView().findViewById(R.id.btnWifi);
+        if (pill != null && pill.getVisibility() == View.VISIBLE) pill.requestFocus();
+    }
+
+    private void openApp() {
+        if (currentPkg.isEmpty()) return;
+        try {
+            PackageManager pm = ctx.getPackageManager();
+            Intent i = pm.getLeanbackLaunchIntentForPackage(currentPkg);
+            if (i == null) i = pm.getLaunchIntentForPackage(currentPkg);
+            if (i != null) ctx.startActivity(i);
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    /** Bottom edge fixed at bottomY; if the card is taller than the space under the date row, it shrinks to fit. */
     private void reposition() {
         int h = panel.getHeight();
-        if (h <= 0) h = (int) (150 * density);
-        float y = Math.max(0f, bottomY - h);
+        if (h <= 0) return;
+        View root = panel.getRootView();
+        View lb = root.findViewById(R.id.leftBlock);
+        float minTop = 0f;
+        if (lb != null) {
+            int[] a = new int[2];
+            int[] b = new int[2];
+            lb.getLocationOnScreen(a);
+            root.getLocationOnScreen(b);
+            minTop = a[1] - b[1] + lb.getHeight() + 4 * density;
+        }
+        float avail = bottomY - minTop;
+        float s = (avail > 0 && avail < h) ? Math.max(0.7f, avail / h) : 1f;
+        panel.setPivotX(0f);
+        panel.setPivotY(h);
+        if (panel.getScaleX() != s) {
+            panel.setScaleX(s);
+            panel.setScaleY(s);
+        }
+        float y = bottomY - h;
         if (panel.getY() != y) panel.setY(y);
     }
 
     private static String fmt(long ms) {
-        long s = ms / 1000;
+        long s = Math.max(0, ms) / 1000;
         return (s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
     }
 
@@ -296,8 +248,20 @@ public class NowPlaying {
         if (!v.getText().toString().equals(s)) v.setText(s);
     }
 
+    private void show() {
+        if (panel.getVisibility() != View.VISIBLE) {
+            panel.setVisibility(View.VISIBLE);
+            panel.post(this::reposition);
+            if (onShowChange != null) onShowChange.run();
+        }
+        if (dockShown && panel.getAlpha() < 1f) panel.setAlpha(1f);
+    }
+
     private void hide() {
-        if (panel.getVisibility() != View.GONE) panel.setVisibility(View.GONE);
+        if (panel.getVisibility() != View.GONE) {
+            panel.setVisibility(View.GONE);
+            if (onShowChange != null) onShowChange.run();
+        }
     }
 
     private MediaController pick() {
@@ -318,30 +282,25 @@ public class NowPlaying {
         if (b == null) b = m.getBitmap(MediaMetadata.METADATA_KEY_ART);
         if (b != null) {
             art.setImageBitmap(b);
-            art.setVisibility(View.VISIBLE);
             artSet = true;
-            tintAurora(b);
         } else {
-            art.setVisibility(View.INVISIBLE);
+            art.setImageDrawable(null);
             artSet = false;
-            tintAurora(null);
         }
     }
 
-    /** The home aurora takes the average colour of the album art (cheap: one 1x1 scale). */
-    private void tintAurora(Bitmap b) {
-        if (!(ctx instanceof Activity) || Glass.bgMode(ctx) != Glass.BG_AURORA) return;
-        View v = ((Activity) ctx).findViewById(R.id.aurora);
-        if (!(v instanceof AuroraView)) return;
-        int color = 0;
-        if (b != null) {
+    private String appName(String pkg) {
+        String name = appNames.get(pkg);
+        if (name == null) {
             try {
-                color = Bitmap.createScaledBitmap(b, 1, 1, true).getPixel(0, 0) | 0xFF000000;
-            } catch (RuntimeException e) {
-                color = 0;
+                PackageManager pm = ctx.getPackageManager();
+                name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString();
+            } catch (Exception ex) {
+                name = pkg;
             }
+            appNames.put(pkg, name);
         }
-        ((AuroraView) v).tint(color);
+        return name;
     }
 
     private void update() {
@@ -371,22 +330,23 @@ public class NowPlaying {
 
             String t = nz(m.getString(MediaMetadata.METADATA_KEY_TITLE));
             String a = nz(m.getString(MediaMetadata.METADATA_KEY_ARTIST));
+            String al = nz(m.getString(MediaMetadata.METADATA_KEY_ALBUM));
             String pkg = found.getPackageName();
-            long duration = m.getLong(MediaMetadata.METADATA_KEY_DURATION);
             String key = pkg + "|" + t + "|" + a;
             if (!key.equals(currentKey)) {
                 currentKey = key;
+                currentPkg = pkg;
+                String name = appName(pkg);
+                setText(label, name + " \u00B7 NOW PLAYING");
                 setText(title, t);
-                setText(artist, a);
+                setText(sub, al.isEmpty() ? a : a + " \u00B7 " + al);
+                setText(open, "Open in " + name);
                 setArt(m);
-                lyricsMap = null;
-                setText(lyric, " ");
-                setText(lyricNext, " ");
-                if (!t.isEmpty()) loadLyrics(key, t, a, duration / 1000);
             } else if (!artSet) {
                 setArt(m);
             }
 
+            long duration = m.getLong(MediaMetadata.METADATA_KEY_DURATION);
             long pos = s.getPosition();
             if (playing) {
                 pos += (long) ((SystemClock.elapsedRealtime() - s.getLastPositionUpdateTime()) * s.getPlaybackSpeed());
@@ -401,106 +361,16 @@ public class NowPlaying {
                     int p = (int) (pos / 1000);
                     if (bar.getProgress() != p) bar.setProgress(p);
                     setText(elapsed, fmt(pos));
+                    setText(remain, "-" + fmt(duration - pos));
                 }
-                setText(total, fmt(duration));
             } else {
                 if (bar.getVisibility() != View.GONE) bar.setVisibility(View.GONE);
                 setText(elapsed, "");
-                setText(total, "");
+                setText(remain, "");
             }
-
-            TreeMap<Long, String> ly = lyricsMap;
-            if (ly != null) {
-                Map.Entry<Long, String> en = ly.floorEntry(pos + 300);
-                Map.Entry<Long, String> nx = ly.higherEntry(pos + 300);
-                String line = (en == null || en.getValue().isEmpty()) ? " " : en.getValue();
-                String nline = (nx == null || nx.getValue().isEmpty()) ? " " : nx.getValue();
-                if (!line.equals(lyric.getText().toString())) {
-                    setText(lyric, line);
-                    setText(lyricNext, nline);
-                    lyric.setTranslationY(14 * density);
-                    lyric.setAlpha(0f);
-                    lyric.animate().translationY(0f).alpha(1f).setDuration(280).start();
-                    lyricNext.setTranslationY(10 * density);
-                    lyricNext.setAlpha(0f);
-                    lyricNext.animate().translationY(0f).alpha(0.55f).setDuration(280).start();
-                }
-            }
-
-            if (panel.getVisibility() != View.VISIBLE) {
-                panel.setVisibility(View.VISIBLE);
-                panel.post(this::reposition);
-            }
-            if (dockShown && !scrolling && panel.getAlpha() < 1f) panel.setAlpha(1f);
+            show();
         } catch (RuntimeException e) {
             hide();
         }
-    }
-
-    private void loadLyrics(final String key, final String t, final String a, final long durSec) {
-        if (cache.containsKey(key)) {
-            TreeMap<Long, String> c = cache.get(key);
-            lyricsMap = (c == null || c.isEmpty()) ? null : c;
-            return;
-        }
-        pool.execute(() -> {
-            TreeMap<Long, String> map = null;
-            HttpURLConnection c = null;
-            try {
-                String q = "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(t, "UTF-8")
-                        + "&artist_name=" + URLEncoder.encode(a, "UTF-8");
-                c = (HttpURLConnection) new URL(q).openConnection();
-                c.setConnectTimeout(6000);
-                c.setReadTimeout(8000);
-                c.setRequestProperty("User-Agent", "CleanYourTV-NowPlaying/1.0");
-                BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), "UTF-8"));
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = r.readLine()) != null) sb.append(line);
-                r.close();
-                JSONArray arr = new JSONArray(sb.toString());
-                String best = null;
-                double bestDiff = 1e9;
-                for (int i = 0; i < arr.length(); i++) {
-                    JSONObject o = arr.getJSONObject(i);
-                    String syn = o.optString("syncedLyrics", "");
-                    if (syn.isEmpty() || syn.equals("null")) continue;
-                    double diff = Math.abs(o.optDouble("duration", 0) - durSec);
-                    if (diff < bestDiff) {
-                        bestDiff = diff;
-                        best = syn;
-                    }
-                }
-                if (best != null) map = parse(best);
-            } catch (Exception ex) {
-                // no lyrics, no network: the lyric line just stays blank
-            } finally {
-                if (c != null) c.disconnect();
-            }
-            final TreeMap<Long, String> result = map;
-            handler.post(() -> {
-                cache.put(key, result == null ? new TreeMap<Long, String>() : result);
-                if (key.equals(currentKey)) lyricsMap = result;
-            });
-        });
-    }
-
-    private TreeMap<Long, String> parse(String lrc) {
-        TreeMap<Long, String> m = new TreeMap<Long, String>();
-        Pattern p = Pattern.compile("\\[(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?\\]");
-        for (String line : lrc.split("\n")) {
-            Matcher mt = p.matcher(line);
-            List<Long> ts = new ArrayList<Long>();
-            int end = 0;
-            while (mt.find()) {
-                long ms = Long.parseLong(mt.group(1)) * 60000 + Long.parseLong(mt.group(2)) * 1000;
-                if (mt.group(3) != null) ms += Long.parseLong((mt.group(3) + "00").substring(0, 3));
-                ts.add(ms);
-                end = mt.end();
-            }
-            String text = line.substring(end).trim();
-            for (long ms : ts) m.put(ms, text);
-        }
-        return m.isEmpty() ? null : m;
     }
 }
