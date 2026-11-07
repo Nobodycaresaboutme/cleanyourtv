@@ -423,12 +423,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private java.util.Map<Integer, String> homeAppKeys = java.util.Collections.emptyMap();
     private NowPlaying nowPlaying;
+    private int npReturn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         nowPlaying = new NowPlaying(this, findViewById(R.id.nowPlaying));
+        nowPlaying.onDown = () -> focusTile(npReturn);
         density = getResources().getDisplayMetrics().density;
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
@@ -1130,6 +1132,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             glass.setAlpha(0f);
             heroShown = false;
             hero.setAlpha(0f);
+        if (nowPlaying != null) nowPlaying.dockHide();
             ambient.setAlpha(0f);
             heroArt.animate().cancel();
             heroArt.setAlpha(0f);
@@ -1809,7 +1812,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         String label = adapter.labelAt(position);
         int color = adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
-        View np = findViewById(R.id.nowPlaying); np.setY(y - (np.getHeight() > 0 ? np.getHeight() : 80 * density) - 16 * density);
+        if (nowPlaying != null) { if (position < COLUMNS) nowPlaying.place(y - 16 * density); else nowPlaying.dockHide(); }
         boolean changed = !label.contentEquals(heroName.getText());
         if (cinematic && heroArtAlpha > 0f) showHeroArt(position);
 
@@ -2088,6 +2091,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         hero.animate().cancel();
         ambient.animate().cancel();
         hero.setAlpha(0f);
+        if (nowPlaying != null) nowPlaying.dockHide();
         heroArt.animate().cancel();
         heroArt.setAlpha(0f);
         heroShown = false;
@@ -2117,10 +2121,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroShown = false;
         if (animations && !reducedMotion) {
             hero.animate().alpha(0f).setDuration(160).start();
+            if (nowPlaying != null) nowPlaying.dockHide();
             if (ambientGlow) ambient.animate().alpha(0f).setDuration(300).start();
             heroArt.animate().alpha(0f).setDuration(300).start();
         } else {
             hero.setAlpha(0f);
+        if (nowPlaying != null) nowPlaying.dockHide();
             ambient.setAlpha(0f);
             heroArt.setAlpha(0f);
         }
@@ -2356,7 +2362,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT);
         }
         if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false;          // dock row: let focus move to the top bar
+            if (position < COLUMNS) { npReturn = position; return nowPlaying != null && nowPlaying.focusControls(); }
             target = position - COLUMNS;
         } else {
             int lastRowStart = ((count - 1) / COLUMNS) * COLUMNS;
