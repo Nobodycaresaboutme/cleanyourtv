@@ -491,7 +491,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         hero = findViewById(R.id.hero);
         nowPlaying = new NowPlaying(this, findViewById(R.id.nowPlaying));
         nowPlaying.onDown = () -> focusTile(npReturn);
-        nowPlaying.onShowChange = () -> { if (cfg.dockTitle) hero.setVisibility(nowPlaying.isShowing() ? View.INVISIBLE : View.VISIBLE); };
+        nowPlaying.onShowChange = () -> { if (hero.getVisibility() != View.GONE) hero.setVisibility(nowPlaying.isShowing() ? View.INVISIBLE : View.VISIBLE); };
         // The hero is now a group (name, and the cinematic lines): without this every fade of the default
         // shelf would render it through an offscreen buffer first, as the glow above notes.
         hero.forceHasOverlappingRendering(false);
@@ -1813,7 +1813,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         String label = adapter.labelAt(position);
         int color = adapter.ambientColorAt(position);
         float y = dockTopInRoot - 14 * density - 26 * density - hero.getHeight();
-        if (nowPlaying != null) { boolean np = position < COLUMNS; if (np) nowPlaying.place(dockTopInRoot - 12 * density); else nowPlaying.dockHide(); if (cfg.dockTitle) hero.setVisibility(np && nowPlaying.isShowing() ? View.INVISIBLE : View.VISIBLE); }
+        if (nowPlaying != null) { boolean np = position < COLUMNS; if (np) nowPlaying.place(dockTopInRoot - 12 * density); else nowPlaying.dockHide(); if (hero.getVisibility() != View.GONE) hero.setVisibility(np && nowPlaying.isShowing() ? View.INVISIBLE : View.VISIBLE); }
         boolean changed = !label.contentEquals(heroName.getText());
         if (cinematic && heroArtAlpha > 0f) showHeroArt(position);
 
