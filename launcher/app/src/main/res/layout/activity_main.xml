@@ -426,6 +426,8 @@
 
         <LinearLayout
             android:layout_width="360dp"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:layout_height="wrap_content"
             android:layout_marginStart="16dp"
             android:orientation="vertical">
@@ -508,6 +510,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
 
